@@ -1,16 +1,63 @@
 use std::collections::BTreeSet;
 use std::ops::Sub;
 
-use bevy::log::tracing_subscriber::fmt::time;
 use bevy::prelude::*;
-use bevy::tasks::futures_lite::stream::iter;
+use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(HelloPlugin)
-        .add_systems(Update, update_kat)
+        .add_systems(Startup, shapes_start_up)
+        .add_systems(Update, (update_kat, shapes_color_update))
         .run();
+}
+
+fn shapes_color_update(
+    time: Res<Time>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    query: Query<&Handle<ColorMaterial>>,
+) {
+    for handle in &query {
+        let color = &mut materials.get_mut(handle).unwrap().color;
+        color.set_h(time.delta().as_secs_f32().mul_add(100.0, color.h()) % 360.0);
+    }
+}
+
+fn shapes_start_up(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    commands.spawn(Camera2dBundle::default());
+
+    let shapes = [
+        Mesh2dHandle(meshes.add(Circle { radius: 50.0 })),
+        Mesh2dHandle(meshes.add(Ellipse::new(25.0, 50.0))),
+        Mesh2dHandle(meshes.add(Capsule2d::new(25.0, 50.0))),
+        Mesh2dHandle(meshes.add(Triangle2d::new(
+            Vec2::Y * 50.0,
+            Vec2::new(-50.0, -50.0),
+            Vec2::new(50.0, -50.0),
+        ))),
+    ];
+
+    let num_shapes = shapes.len();
+
+    shapes.into_iter().enumerate().for_each(|(idx, shape)| {
+        let color = Color::hsl(360.0 * idx as f32 / num_shapes as f32, 0.95, 0.7);
+
+        commands.spawn(MaterialMesh2dBundle {
+            mesh: shape,
+            material: materials.add(color),
+            transform: Transform::from_xyz(
+                (idx as f32 / (num_shapes - 1) as f32).mul_add(600.0, -600.0 / 2.0),
+                0.0,
+                0.0,
+            ),
+            ..default()
+        });
+    });
 }
 
 #[derive(Component)]
