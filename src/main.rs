@@ -4,13 +4,73 @@ use std::ops::Sub;
 use bevy::prelude::*;
 use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
 
+const NUMBER_OF_BOIDS: u32 = 300;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(HelloPlugin)
-        .add_systems(Startup, shapes_start_up)
-        .add_systems(Update, (update_kat, shapes_color_update))
+        .add_systems(Startup, (boids_startup))
+        .add_systems(FixedUpdate, (update_kat, boids_update))
         .run();
+}
+
+fn boids_startup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    let triangle = Triangle2d::new(
+        Vec2::Y * 50.0,
+        Vec2::new(-50.0, -50.0),
+        Vec2::new(50.0, -50.0),
+    );
+    let speed = Vec2::Y * 100.0;
+
+    for idx in 0..NUMBER_OF_BOIDS {
+        let mesh2d_handle = Mesh2dHandle(meshes.add(triangle));
+        let direction2d = Direction2d::new(
+            Vec2::Y.rotate(Vec2::from_angle(
+                (idx as f32 / NUMBER_OF_BOIDS as f32)
+                    .mul_add(std::f32::consts::PI, -std::f32::consts::PI),
+            )),
+        )
+        .unwrap();
+        let color_material_handle = materials.add(Color::AQUAMARINE);
+
+        let material_mesh2d_bundle = MaterialMesh2dBundle {
+            mesh: mesh2d_handle.clone(),
+            material: color_material_handle.clone(),
+            transform: Transform::from_xyz(300.0, 0.0, 0.0),
+            ..default()
+        };
+
+        let boid = Boid { direction2d, speed };
+
+        commands.spawn((boid, material_mesh2d_bundle));
+    }
+}
+
+#[derive(Component, Debug, Clone)]
+struct Boid {
+    direction2d: Direction2d,
+    speed: Vec2,
+}
+
+fn boids_update(mut query: Query<(&Boid, &mut Transform)>, time: Res<Time>) {
+    let dt = time.delta_seconds();
+    for (boid, mut transform) in &mut query {
+        let Boid { direction2d, speed } = boid;
+
+        let position = transform.translation;
+
+        let distance = *speed * dt;
+        let displacement = distance.rotate(**direction2d);
+
+        let new_position = position + displacement.extend(0.0);
+
+        transform.translation = new_position;
+    }
 }
 
 fn shapes_color_update(
